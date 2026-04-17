@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dama Italiana - Grandmaster Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --board-dark: #769656;
+            --board-light: #eeeed2;
+        }
+        .board {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            width: 100%;
+            max-width: 600px;
+            aspect-ratio: 1 / 1;
+            border: 8px solid #333;
+            user-select: none;
+        }
+        .square {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+        .square.dark { background-color: var(--board-dark); }
+        .square.light { background-color: var(--board-light); }
+        
+        .piece {
+            width: 85%;
+            height: 85%;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            position: relative;
+        }
+        .piece.white {
+            background: radial-gradient(circle at 30% 30%, #ffffff, #dcdcdc);
+            box-shadow: 0 4px 0 #999;
+        }
+        .piece.black {
+            background: radial-gradient(circle at 30% 30%, #444, #111);
+            box-shadow: 0 4px 0 #000;
+        }
+        .piece.king::after {
+            content: '👑';
+            font-size: 1.5rem;
+            color: #ffd700;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        }
+        .piece.selected {
+            transform: scale(1.1) translateY(-5px);
+            box-shadow: 0 10px 20px rgba(255, 255, 0, 0.5);
+        }
+        .move-indicator {
+            width: 25%;
+            height: 25%;
+            background-color: rgba(0, 0, 0, 0.15);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+        .capture-indicator {
+            width: 85%;
+            height: 85%;
+            border: 4px dashed rgba(255, 0, 0, 0.5);
+            border-radius: 50%;
+            position: absolute;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(0.9); opacity: 0.5; }
+            50% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(0.9); opacity: 0.5; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen flex flex-col items-center py-6 px-4 font-sans text-slate-900">
+
+    <!-- Menu Principale -->
+    <div id="main-menu" class="fixed inset-0 bg-slate-900 z-[100] flex flex-col items-center justify-center p-6 transition-opacity duration-500">
+        <div class="text-center mb-12">
+            <h1 class="text-5xl font-black text-white tracking-tighter mb-2 uppercase italic">Dama Italiana</h1>
+            <p class="text-slate-400 font-medium uppercase tracking-widest text-sm">Professional Engine Edition</p>
+        </div>
+        
+        <div class="flex flex-col gap-4 w-full max-w-xs">
+            <button onclick="startNewGame()" class="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl font-black text-lg shadow-xl transition-all transform hover:scale-105 active:scale-95 uppercase">
+                Nuova Partita
+            </button>
+            <button id="btn-continue" onclick="continueGame()" class="w-full bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-2xl font-black text-lg shadow-xl transition-all transform hover:scale-105 active:scale-95 uppercase disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100">
+                Continua
+            </button>
+        </div>
+        
+        <div class="mt-12 text-slate-500 text-[10px] uppercase font-bold tracking-tighter">Powered by Minimax Alpha-Beta Engine</div>
+    </div>
+
+    <!-- Interfaccia di Gioco -->
+    <div id="game-container" class="max-w-2xl w-full flex flex-col items-center gap-4 opacity-0 pointer-events-none transition-opacity duration-500">
+        <header class="text-center mb-2 flex items-center justify-between w-full">
+            <button onclick="backToMenu()" class="text-slate-400 hover:text-slate-800 font-bold text-xs uppercase">← Menu</button>
+            <h1 class="text-xl font-black text-slate-800 uppercase tracking-tighter">Partita in corso</h1>
+            <div class="w-10"></div>
+        </header>
+
+        <div class="w-full bg-white p-3 rounded-2xl shadow-sm border border-slate-200">
+            <label class="block text-center text-xs font-bold text-slate-400 mb-2 uppercase tracking-widest text-[10px]">Livello IA</label>
+            <div class="grid grid-cols-5 gap-1">
+                <button onclick="setDifficulty(1)" id="diff-1" class="diff-btn py-2 rounded-lg text-[9px] font-bold transition-all border-2 border-transparent bg-slate-100">FACILE</button>
+                <button onclick="setDifficulty(3)" id="diff-3" class="diff-btn py-2 rounded-lg text-[9px] font-bold transition-all border-2 border-transparent bg-slate-100">MEDIO</button>
+                <button onclick="setDifficulty(5)" id="diff-5" class="diff-btn py-2 rounded-lg text-[9px] font-bold transition-all border-2 border-transparent bg-slate-100">DIFFICILE</button>
+                <button onclick="setDifficulty(7)" id="diff-7" class="diff-btn py-2 rounded-lg text-[9px] font-bold transition-all border-2 border-transparent bg-slate-100">ESPERTO</button>
+                <button onclick="setDifficulty(9)" id="diff-9" class="diff-btn py-2 rounded-lg text-[9px] font-bold transition-all border-2 border-transparent bg-slate-100">MAESTRO</button>
+            </div>
+        </div>
+
+        <div class="flex justify-between items-center w-full bg-slate-800 text-white p-4 rounded-2xl shadow-xl">
+            <div class="text-center">
+                <p class="text-[10px] opacity-60 uppercase font-bold">Tu (Bianchi)</p>
+                <p class="text-2xl font-black" id="white-count">12</p>
+            </div>
+            <div id="turn-display" class="px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest bg-white text-slate-900 shadow-inner min-w-[140px] text-center">
+                CARICAMENTO...
+            </div>
+            <div class="text-center">
+                <p class="text-[10px] opacity-60 uppercase font-bold">IA (Neri)</p>
+                <p class="text-2xl font-black" id="black-count">12</p>
+            </div>
+        </div>
+
+        <div id="board" class="board shadow-2xl rounded-lg overflow-hidden border-4 border-slate-800 bg-slate-300"></div>
+
+        <button onclick="resetGame()" class="w-full bg-slate-200 hover:bg-slate-300 text-slate-800 py-3 rounded-xl font-bold transition-all text-sm uppercase tracking-wider">
+            Resetta scacchiera
+        </button>
+
+        <div id="game-msg" class="hidden fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[150] p-6">
+            <div class="bg-white p-10 rounded-3xl text-center shadow-2xl max-w-sm w-full border-t-8 border-red-500">
+                <p id="winner-sub" class="text-slate-400 text-[10px] font-bold uppercase mb-2">Risultato Finale</p>
+                <h2 id="winner-text" class="text-4xl font-black mb-6 text-slate-800"></h2>
+                <button onclick="backToMenu(); resetGame();" class="w-full bg-slate-900 text-white py-4 rounded-2xl font-black hover:bg-black transition-all uppercase">
+                    Torna al Menu
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const BOARD_SIZE = 8;
+        const WHITE = 'white';
+        const BLACK = 'black';
+        const STORAGE_KEY = 'dama_italiana_save';
+        
+        let board = [];
+        let selectedSquare = null;
+        let validMoves = [];
+        let currentTurn = WHITE;
+        let isGameOver = false;
+        let mustCapture = [];
+        let aiDepth = 3; 
+
+        const boardElement = document.getElementById('board');
+        const turnDisplay = document.getElementById('turn-display');
+        const whiteCountEl = document.getElementById('white-count');
+        const blackCountEl = document.getElementById('black-count');
+        const gameMsg = document.getElementById('game-msg');
+        const winnerText = document.getElementById('winner-text');
+        const mainMenu = document.getElementById('main-menu');
+        const gameContainer = document.getElementById('game-container');
+        const btnContinue = document.getElementById('btn-continue');
+
+        function checkExistingSave() {
+            const save = localStorage.getItem(STORAGE_KEY);
+            if (save) {
+                const data = JSON.parse(save);
+                // Abilita solo se la partita salvata non era finita
+                if (!data.isGameOver) {
+                    btnContinue.disabled = false;
+                    return true;
+                }
+            }
+            btnContinue.disabled = true;
+            return false;
+        }
+
+        function saveGame() {
+            const gameData = {
+                board,
+                currentTurn,
+                aiDepth,
+                isGameOver
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(gameData));
+        }
+
+        function continueGame() {
+            const save = localStorage.getItem(STORAGE_KEY);
+            if (save) {
+                const data = JSON.parse(save);
+                board = data.board;
+                currentTurn = data.currentTurn;
+                aiDepth = data.aiDepth;
+                isGameOver = data.isGameOver;
+                
+                showGame();
+                setDifficulty(aiDepth);
+                renderBoard();
+                updateTurnUI();
+                checkMustCapture();
+                
+                if (currentTurn === BLACK) {
+                    setTimeout(aiMove, 500);
+                }
+            }
+        }
+
+        function startNewGame() {
+            resetGame();
+            showGame();
+        }
+
+        function showGame() {
+            mainMenu.style.opacity = '0';
+            setTimeout(() => {
+                mainMenu.classList.add('hidden');
+                gameContainer.classList.remove('hidden', 'pointer-events-none');
+                gameContainer.style.opacity = '1';
+            }, 500);
+        }
+
+        function backToMenu() {
+            gameContainer.style.opacity = '0';
+            setTimeout(() => {
+                gameContainer.classList.add('hidden');
+                mainMenu.classList.remove('hidden');
+                mainMenu.style.opacity = '1';
+                checkExistingSave();
+            }, 500);
+        }
+
+        function setDifficulty(depth) {
+            aiDepth = depth;
+            document.querySelectorAll('.diff-btn').forEach(btn => {
+                btn.classList.remove('bg-red-600', 'text-white', 'border-red-400', 'scale-105');
+                btn.classList.add('bg-slate-100', 'text-slate-600');
+            });
+            const activeBtn = document.getElementById(`diff-${depth}`);
+            if(activeBtn) {
+                activeBtn.classList.remove('bg-slate-100', 'text-slate-600');
+                activeBtn.classList.add('bg-red-600', 'text-white', 'border-red-400', 'scale-105');
+            }
+            saveGame();
+        }
+
+        function initGame() {
+            board = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    if ((r + c) % 2 !== 0) {
+                        if (r < 3) board[r][c] = { color: BLACK, king: false };
+                        else if (r > 4) board[r][c] = { color: WHITE, king: false };
+                    }
+                }
+            }
+            isGameOver = false;
+            currentTurn = WHITE;
+            selectedSquare = null;
+            validMoves = [];
+            renderBoard();
+            updateTurnUI();
+            checkMustCapture();
+            saveGame();
+        }
+
+        function renderBoard() {
+            boardElement.innerHTML = '';
+            let counts = { white: 0, black: 0 };
+
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    const square = document.createElement('div');
+                    square.className = `square ${(r + c) % 2 === 0 ? 'light' : 'dark'}`;
+                    
+                    const pieceData = board[r][c];
+                    if (pieceData) {
+                        counts[pieceData.color]++;
+                        const piece = document.createElement('div');
+                        piece.className = `piece ${pieceData.color} ${pieceData.king ? 'king' : ''}`;
+                        if (selectedSquare && selectedSquare.r === r && selectedSquare.c === c) {
+                            piece.classList.add('selected');
+                        }
+                        piece.onclick = (e) => { e.stopPropagation(); handleSquareClick(r, c); };
+                        square.appendChild(piece);
+                    }
+
+                    const move = validMoves.find(m => m.to.r === r && m.to.c === c);
+                    if (move) {
+                        const indicator = document.createElement('div');
+                        indicator.className = move.captured ? 'capture-indicator' : 'move-indicator';
+                        square.appendChild(indicator);
+                        square.onclick = () => handleSquareClick(r, c);
+                    } else {
+                        square.onclick = () => handleSquareClick(r, c);
+                    }
+
+                    boardElement.appendChild(square);
+                }
+            }
+            whiteCountEl.innerText = counts.white;
+            blackCountEl.innerText = counts.black;
+            
+            if (counts.white === 0 && counts.black > 0) endGame("IA VINCE");
+            else if (counts.black === 0 && counts.white > 0) endGame("HAI VINTO!");
+        }
+
+        function handleSquareClick(r, c) {
+            if (isGameOver || currentTurn === BLACK) return;
+
+            const clickedPiece = board[r][c];
+
+            if (clickedPiece && clickedPiece.color === currentTurn) {
+                if (selectedSquare && (selectedSquare.r !== r || selectedSquare.c !== c) && validMoves.length > 0 && validMoves[0].captured) {
+                    return; 
+                }
+                selectedSquare = { r, c };
+                validMoves = getValidMovesForPiece(board, r, c);
+                if (mustCapture.length > 0) {
+                    validMoves = validMoves.filter(m => m.captured);
+                }
+                renderBoard();
+                return;
+            }
+
+            const move = validMoves.find(m => m.to.r === r && m.to.c === c);
+            if (move) {
+                executeMove(move);
+            } else {
+                if (!(selectedSquare && validMoves.length > 0 && validMoves[0].captured)) {
+                    selectedSquare = null;
+                    validMoves = [];
+                    renderBoard();
+                }
+            }
+        }
+
+        function getValidMovesForPiece(currentBoard, r, c, forceCaptureOnly = false) {
+            const piece = currentBoard[r][c];
+            if (!piece) return [];
+            
+            const moves = [];
+            const directions = piece.king ? [[1, 1], [1, -1], [-1, 1], [-1, -1]] : 
+                               (piece.color === WHITE ? [[-1, 1], [-1, -1]] : [[1, 1], [1, -1]]);
+
+            for (let [dr, dc] of directions) {
+                const nr = r + dr;
+                const nc = c + dc;
+
+                if (!forceCaptureOnly && isInside(nr, nc) && !currentBoard[nr][nc]) {
+                    moves.push({ from: { r, c }, to: { r: nr, c: nc }, captured: null });
+                }
+
+                const jr = r + dr * 2;
+                const jc = c + dc * 2;
+                if (isInside(jr, jc) && !currentBoard[jr][jc] && currentBoard[nr][nc]) {
+                    const victim = currentBoard[nr][nc];
+                    if (victim.color !== piece.color) {
+                        if (piece.king || !victim.king) {
+                            moves.push({ from: { r, c }, to: { r: jr, c: jc }, captured: { r: nr, c: nc } });
+                        }
+                    }
+                }
+            }
+            return moves;
+        }
+
+        function isInside(r, c) {
+            return r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE;
+        }
+
+        function checkMustCapture() {
+            mustCapture = getAllValidMoves(board, currentTurn).filter(m => m.captured);
+            return mustCapture.length > 0;
+        }
+
+        function executeMove(move) {
+            const piece = board[move.from.r][move.from.c];
+            board[move.to.r][move.to.c] = piece;
+            board[move.from.r][move.from.c] = null;
+
+            if (move.captured) {
+                board[move.captured.r][move.captured.c] = null;
+                const multiMoves = getValidMovesForPiece(board, move.to.r, move.to.c, true).filter(m => m.captured);
+                
+                if (multiMoves.length > 0) {
+                    selectedSquare = { r: move.to.r, c: move.to.c };
+                    validMoves = multiMoves;
+                    renderBoard();
+                    if (currentTurn === BLACK) {
+                        setTimeout(() => executeMove(multiMoves[0]), 400);
+                    }
+                    return;
+                }
+            }
+
+            if (piece.color === WHITE && move.to.r === 0) piece.king = true;
+            if (piece.color === BLACK && move.to.r === BOARD_SIZE - 1) piece.king = true;
+
+            selectedSquare = null;
+            validMoves = [];
+            currentTurn = currentTurn === WHITE ? BLACK : WHITE;
+            updateTurnUI();
+            renderBoard();
+            saveGame();
+
+            if (currentTurn === BLACK && !isGameOver) {
+                setTimeout(aiMove, 500);
+            } else {
+                checkMustCapture();
+                if (getAllValidMoves(board, WHITE).length === 0) endGame("IA VINCE");
+            }
+        }
+
+        function getAllValidMoves(state, color) {
+            let moves = [];
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    if (state[r][c] && state[r][c].color === color) {
+                        moves.push(...getValidMovesForPiece(state, r, c));
+                    }
+                }
+            }
+            const captures = moves.filter(m => m.captured);
+            return captures.length > 0 ? captures : moves;
+        }
+
+        function updateTurnUI() {
+            if (currentTurn === WHITE) {
+                turnDisplay.innerText = "Tuo Turno";
+                turnDisplay.className = "px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest bg-blue-600 text-white shadow-lg animate-pulse min-w-[140px] text-center";
+            } else {
+                turnDisplay.innerText = "IA sta pensando...";
+                turnDisplay.className = "px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest bg-slate-700 text-slate-300 min-w-[140px] text-center";
+            }
+        }
+
+        function endGame(msg) {
+            isGameOver = true;
+            saveGame();
+            winnerText.innerText = msg;
+            gameMsg.classList.remove('hidden');
+        }
+
+        function resetGame() {
+            isGameOver = false;
+            currentTurn = WHITE;
+            selectedSquare = null;
+            validMoves = [];
+            gameMsg.classList.add('hidden');
+            initGame();
+        }
+
+        function aiMove() {
+            if (isGameOver) return;
+            
+            const moves = getAllValidMoves(board, BLACK);
+            if (moves.length === 0) {
+                endGame("VITTORIA!");
+                return;
+            }
+
+            const result = minimax(board, aiDepth, -Infinity, Infinity, true);
+            const bestMove = result.move || moves[0];
+
+            executeMove(bestMove);
+        }
+
+        function minimax(state, depth, alpha, beta, isMaximizing) {
+            if (depth === 0) return { score: evaluateState(state) };
+
+            const moves = getAllValidMoves(state, isMaximizing ? BLACK : WHITE);
+            if (moves.length === 0) return { score: isMaximizing ? -20000 : 20000 };
+
+            let bestMove = null;
+            let bestScore = isMaximizing ? -Infinity : Infinity;
+
+            for (const move of moves) {
+                const newState = applyMoveToState(state, move);
+                let finalScore;
+                const multiMoves = getValidMovesForPiece(newState, move.to.r, move.to.c, true).filter(m => m.captured);
+                
+                if (move.captured && multiMoves.length > 0) {
+                    const multiResult = minimax(newState, depth, alpha, beta, isMaximizing);
+                    finalScore = multiResult.score;
+                } else {
+                    const evaluation = minimax(newState, depth - 1, alpha, beta, !isMaximizing);
+                    finalScore = evaluation.score;
+                }
+                
+                if (isMaximizing) {
+                    if (finalScore > bestScore) {
+                        bestScore = finalScore;
+                        bestMove = move;
+                    }
+                    alpha = Math.max(alpha, bestScore);
+                } else {
+                    if (finalScore < bestScore) {
+                        bestScore = finalScore;
+                        bestMove = move;
+                    }
+                    beta = Math.min(beta, bestScore);
+                }
+                if (beta <= alpha) break;
+            }
+
+            return { score: bestScore, move: bestMove };
+        }
+
+        function applyMoveToState(state, move) {
+            const newState = state.map(row => row.map(cell => cell ? { ...cell } : null));
+            const p = newState[move.from.r][move.from.c];
+            newState[move.to.r][move.to.c] = p;
+            newState[move.from.r][move.from.c] = null;
+            if (move.captured) newState[move.captured.r][move.captured.c] = null;
+            if (p.color === BLACK && move.to.r === 7) p.king = true;
+            if (p.color === WHITE && move.to.r === 0) p.king = true;
+            return newState;
+        }
+
+        function evaluateState(state) {
+            let score = 0;
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    const p = state[r][c];
+                    if (p) {
+                        let val = p.king ? 100 : 40;
+                        if (c === 0 || c === 7) val += 10;
+                        if (!p.king) val += (p.color === BLACK ? r : (7 - r)) * 5;
+                        if (p.color === BLACK) score += val;
+                        else score -= val;
+                    }
+                }
+            }
+            return score;
+        }
+
+        window.onload = () => {
+            initGame();
+            checkExistingSave();
+            // Mostra il menu, non inizializzare il gioco visivamente
+            gameContainer.classList.add('hidden');
+        };
+    </script>
+</body>
+</html>
