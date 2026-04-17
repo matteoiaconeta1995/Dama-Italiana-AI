@@ -8,4 +8,4 @@ Un gioco di Dama Italiana sviluppato interamente in HTML5, Tailwind CSS e JavaSc
 - **Salvataggio**: Supporto LocalStorage per continuare le partite in sospeso.
 - **Responsive**: Giocabile su PC e Smartphone.
 
-[Clicca qui per giocare subito!](https://tuonomeutente.github.io/dama-italiana-ai/)
+[Clicca qui per giocare subito!](https://matteoiaconeta1995.github.io/dama-italiana-ai/)
